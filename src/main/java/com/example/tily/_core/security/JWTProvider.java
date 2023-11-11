@@ -14,7 +14,7 @@ import java.util.Date;
 
 @Component
 public class JWTProvider {
-    public static final Long ACCESS_EXP = 1000L * 60 * 60; // 1시간
+    public static final Long ACCESS_EXP = 1000L * 60 * 60 * 24; // 1시간
     public static final Long REFRESH_EXP = 1000L * 60 * 60 * 24 * 7; // 일주일
 
     public static final String TOKEN_PREFIX = "Bearer "; // 스페이스 필요함
@@ -24,7 +24,7 @@ public class JWTProvider {
     // access token 생성
     public static String createAccessToken(User user) {
         String jwt = createToken(user, ACCESS_EXP);
-        return TOKEN_PREFIX + jwt;
+        return jwt;
     }
 
     // refresh token 생성

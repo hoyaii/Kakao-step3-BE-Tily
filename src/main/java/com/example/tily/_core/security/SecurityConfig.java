@@ -1,8 +1,8 @@
 package com.example.tily._core.security;
 
 
-import com.example.tily._core.errors.exception.Exception401;
-import com.example.tily._core.errors.exception.Exception403;
+import com.example.tily._core.errors.CustomException;
+import com.example.tily._core.errors.ExceptionCode;
 import com.example.tily._core.utils.FilterResponseUtils;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -61,21 +61,22 @@ public class SecurityConfig {
 
         // 인증 실패 처리
         http.exceptionHandling().authenticationEntryPoint((request, response, authException) -> {
-            FilterResponseUtils.unAuthorized(response, new Exception401("인증되지 않았습니다"));
+            FilterResponseUtils.unAuthorized(response, new CustomException(ExceptionCode.USER_UNAUTHORIZED));
         });
 
         // 권한 실패 처리
         http.exceptionHandling().accessDeniedHandler((request, response, accessDeniedException) -> {
-            FilterResponseUtils.forbidden(response, new Exception403("권한이 없습니다"));
+            FilterResponseUtils.forbidden(response, new CustomException(ExceptionCode.USER_FORBIDDEN));
         });
 
         // 인증, 권한 필터 설정
         http.authorizeRequests(
-                authorize -> authorize.antMatchers(HttpMethod.GET, "/roadmaps").permitAll()
-                        .antMatchers(HttpMethod.GET, "/roadmaps/my").authenticated()
-                        .antMatchers(HttpMethod.GET, "/roadmaps/{roadmapId}").access("hasRole('ROLE_NONE') or hasRole('ROLE_USER')")
-                        .antMatchers("/roadmaps/**", "/user/**").authenticated()
-                        .antMatchers("/admin/**").access("hasRole('ADMIN')")
+                authorize -> authorize.antMatchers("/api/email/**", "/api/join", "/api/login", "/api/password/**", "/api/auth/**").permitAll()
+                        .antMatchers(HttpMethod.GET, "/api/roadmaps").permitAll()
+                        .antMatchers("/api/roadmaps/my").authenticated()
+                        .antMatchers(HttpMethod.GET, "/api/roadmaps/{roadmapId}").permitAll()
+                        .antMatchers(HttpMethod.GET, "/api/refresh").permitAll()
+                        .antMatchers("/api/roadmaps/**", "/api/alarms/**", "/api/comments/**", "/api/images/**", "/api/references/**", "/api/references/**", "/api/steps/**", "/api/tils/**", "/api/users/**", "/api/gardens").authenticated()
                         .anyRequest().permitAll()
         );
 

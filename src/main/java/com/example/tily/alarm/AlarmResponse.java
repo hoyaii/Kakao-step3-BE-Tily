@@ -8,27 +8,39 @@ import java.util.List;
 
 public class AlarmResponse {
 
-    public record RoadmapDTO(Long id, String name) {
+    public record RoadmapDTO(
+            Long id,
+            String name
+    ) {
         public RoadmapDTO(Roadmap roadmap) {
-            this(roadmap.getId(), roadmap.getName());
+            this(roadmap.getId(),
+                 roadmap.getName());
         }
     }
 
-    public record StepDTO(Long id, String title){
-        public StepDTO(Step step){
-            this(step.getId(), step.getTitle());
+    public record StepDTO(
+            Long id,
+            String title
+    ){
+        public StepDTO(Step step) {
+            this(step.getId(),
+                 step.getTitle());
         }
     }
 
-    public record SenderDTO(String name,String image){
-        public SenderDTO(User user){
-            this(user.getName(), user.getImage());
+    public record SenderDTO(
+            String name,
+            String image
+    ){
+        public SenderDTO(User user) {
+            this(user.getName(),
+                 user.getImage());
         }
     }
 
     public record AlarmDTO(Long id,
                            Long tilId,
-                           Boolean isChecked,
+                           boolean isRead,
                            String createDate,
                            RoadmapDTO roadmap,
                            StepDTO step,
@@ -37,7 +49,7 @@ public class AlarmResponse {
         public AlarmDTO(Alarm alarm){
             this(alarm.getId(),
                     alarm.getTil().getId(),
-                    alarm.getIsChecked(),
+                    alarm.isRead(),
                     alarm.getCreatedDate().format(DateTimeFormatter.ofPattern("yyyy-MM-dd")),
                     new RoadmapDTO(alarm.getTil().getRoadmap()),
                     new StepDTO(alarm.getTil().getStep()),
@@ -45,6 +57,6 @@ public class AlarmResponse {
         }
     }
 
-    public record FindAllDTO(List<AlarmDTO> alarms)                                                       {
-    }
+    public record FindAllDTO(List<AlarmDTO> alarms)
+    { }
 }
