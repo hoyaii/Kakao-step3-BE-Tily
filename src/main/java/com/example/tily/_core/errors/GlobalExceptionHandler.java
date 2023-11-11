@@ -1,6 +1,5 @@
 package com.example.tily._core.errors;
 
-import com.example.tily._core.errors.exception.*;
 import com.example.tily._core.utils.ApiUtils;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -12,31 +11,6 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(CustomException.class)
     public ResponseEntity<?> customError(CustomException e) {
-        return new ResponseEntity<>(e.body(), e.status());
-    }
-
-    @ExceptionHandler(Exception400.class)
-    public ResponseEntity<?> badRequest(Exception400 e){
-        return new ResponseEntity<>(e.body(), e.status());
-    }
-
-    @ExceptionHandler(Exception401.class)
-    public ResponseEntity<?> unAuthorized(Exception401 e){
-        return new ResponseEntity<>(e.body(), e.status());
-    }
-
-    @ExceptionHandler(Exception403.class)
-    public ResponseEntity<?> forbidden(Exception403 e){
-        return new ResponseEntity<>(e.body(), e.status());
-    }
-
-    @ExceptionHandler(Exception404.class)
-    public ResponseEntity<?> notFound(Exception404 e){
-        return new ResponseEntity<>(e.body(), e.status());
-    }
-
-    @ExceptionHandler(Exception500.class)
-    public ResponseEntity<?> serverError(Exception500 e){
         return new ResponseEntity<>(e.body(), e.status());
     }
 

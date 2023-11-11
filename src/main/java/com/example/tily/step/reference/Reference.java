@@ -5,6 +5,8 @@ import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.SQLDelete;
+import org.hibernate.annotations.Where;
 
 import javax.persistence.*;
 
@@ -12,6 +14,8 @@ import javax.persistence.*;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Entity
 @Table(name="reference_tb")
+@SQLDelete(sql = "UPDATE reference_tb SET is_deleted = true WHERE id = ?")
+@Where(clause = "is_deleted = false")
 public class Reference {
 
     @Id
@@ -25,18 +29,17 @@ public class Reference {
     @Column(nullable = false)
     private String category;
 
-    @Column(nullable = false, columnDefinition="TEXT", length = 1000)
+    @Column(columnDefinition="TEXT", length = 1000)
     private String link;
 
-    @Builder
-    public Reference(Step step, Long id, String category, String link) {
-        this.step = step;
-        this.id = id;
-        this.category = category;
-        this.link = link;
-    }
+    @Column
+    private boolean isDeleted = false;
 
-    public void update(String link){
+    @Builder
+    public Reference(Step step, Long referenceId, String category, String link) {
+        this.step = step;
+        this.id = referenceId;
+        this.category = category;
         this.link = link;
     }
 }

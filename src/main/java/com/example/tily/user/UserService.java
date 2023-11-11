@@ -1,12 +1,22 @@
 package com.example.tily.user;
 
-import com.example.tily._core.errors.exception.Exception403;
-import com.example.tily._core.errors.exception.Exception404;
-import com.example.tily._core.errors.exception.ExceptionCode;
-import com.example.tily._core.errors.exception.CustomException;
+import com.example.tily._core.errors.ExceptionCode;
+import com.example.tily._core.errors.CustomException;
 import com.auth0.jwt.interfaces.DecodedJWT;
 import com.example.tily._core.security.JWTProvider;
 import com.example.tily._core.utils.RedisUtils;
+import com.example.tily.alarm.AlarmRepository;
+import com.example.tily.comment.Comment;
+import com.example.tily.comment.CommentRepository;
+import com.example.tily.roadmap.Roadmap;
+import com.example.tily.roadmap.RoadmapRepository;
+import com.example.tily.roadmap.relation.UserRoadmap;
+import com.example.tily.roadmap.relation.UserRoadmapRepository;
+import com.example.tily.step.Step;
+import com.example.tily.step.StepRepository;
+import com.example.tily.step.reference.ReferenceRepository;
+import com.example.tily.step.relation.UserStep;
+import com.example.tily.step.relation.UserStepRepository;
 import com.example.tily.til.Til;
 import com.example.tily.til.TilRepository;
 import lombok.RequiredArgsConstructor;
@@ -32,19 +42,28 @@ public class UserService {
     private final JavaMailSender javaMailSender;
     private final RedisUtils redisUtils;
     private final TilRepository tilRepository;
+    private final UserRoadmapRepository userRoadmapRepository;
+    private final UserStepRepository userStepRepository;
+    private final RoadmapRepository roadmapRepository;
+    private final CommentRepository commentRepository;
+    private final StepRepository stepRepository;
+    private final ReferenceRepository referenceRepository;
+    private final AlarmRepository alarmRepository;
+
+    private String defaultImage = "/assets/icons/ic_profile";
 
     // (회원가입) 이메일 중복 체크 후 인증코드 전송
     @Transactional
     public void checkEmail(UserRequest.CheckEmailDTO requestDTO) {
         checkEmail(requestDTO.email());
-        sendCode(requestDTO.email());
+        //sendCode(requestDTO.email());
     }
 
     // 인증코드 전송
     @Transactional
     public void sendEmailCode(UserRequest.SendEmailCodeDTO requestDTO) {
         findByEmail(requestDTO.email());
-        sendCode(requestDTO.email());
+        //sendCode(requestDTO.email());
     }
 
     // 인증코드 확인
@@ -67,11 +86,15 @@ public class UserService {
     @Transactional
     public void join(UserRequest.JoinDTO requestDTO) {
         checkEmail(requestDTO.email());
+        
+        if (!requestDTO.password().equals(requestDTO.passwordConfirm()))
+            throw new CustomException(ExceptionCode.USER_PASSWORD_WRONG);
 
         User user = User.builder()
                 .email(requestDTO.email())
                 .name(requestDTO.name())
                 .password(passwordEncoder.encode(requestDTO.password()))
+                .image(createDefaultImage(defaultImage))
                 .role(Role.ROLE_USER)
                 .build();
 
@@ -96,9 +119,10 @@ public class UserService {
         Long userId = decodedJWT.getClaim("id").asLong();
 
         if (!redisUtils.existData(userId.toString()))
-            throw new Exception403("Refresh 토큰이 만료됐습니다.");
+            throw new CustomException(ExceptionCode.TOKEN_EXPIRED);
 
         User user = findById(userId);
+
         return createToken(user);
     }
 
@@ -116,12 +140,12 @@ public class UserService {
         return new UserResponse.UserDTO(findById(user.getId()));
     }
 
-    // 사용자 정보 수정
+    //  사용자 정보 수정 - 비밀번호 수정
     @Transactional
-    public void updateUser(UserRequest.UpdateUserDTO requestDTO, Long id) {
-        User user = findById(id);
+    public void updatePassword(UserRequest.UpdateUserDTO requestDTO, Long userId) {
+        User user = findById(userId);
 
-        if (!user.getId().equals(id))
+        if (!user.getId().equals(userId))
             throw new CustomException(ExceptionCode.USER_UPDATE_FORBIDDEN);
 
         if (!passwordEncoder.matches(requestDTO.curPassword(), user.getPassword()))
@@ -144,15 +168,17 @@ public class UserService {
 
         List<Til> tils = tilRepository.findTilsByUserIdAndDateRange(userId, beginDateTime, endDateTime);
 
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+
         // 모든 날에 대한 작성여부 0으로 초기화.
         for (LocalDate date = beginDateTime.toLocalDate(); !date.isAfter(endDateTime.toLocalDate()); date = date.plusDays(1)) {
-            maps.put(date.format(DateTimeFormatter.ofPattern("yyyy-MM-dd")), 0);
+            maps.put(date.format(formatter), 0);
         }
 
         // TIL 존재하는 날의 작성여부만 1로 변경.
         for (Til til : tils) {
             LocalDate tilDate = til.getCreatedDate().toLocalDate();
-            maps.put(tilDate.format(DateTimeFormatter.ofPattern("yyyy-MM-dd")), 1);
+            maps.put(tilDate.format(formatter), 1);
         }
 
         List<UserResponse.ViewGardensDTO.GardenDTO> gardens = maps.entrySet().stream()
@@ -160,6 +186,73 @@ public class UserService {
                 .collect(Collectors.toList());
 
         return new UserResponse.ViewGardensDTO(gardens);
+    }
+
+    // 회원 탈퇴하기
+    public void withdrawMembership(User user){
+        // 1. 유저가 작성한 Comment들 삭제
+        List<Comment> comments = getCommentByUserId(user.getId());
+        List<Long> commentIds = comments.stream()
+                .map(Comment::getId)
+                .collect(Collectors.toList());
+
+        commentRepository.softDeleteCommentsByIds(commentIds);
+
+        // 2. Comment들과 관련된 Alarm 삭제
+        alarmRepository.deleteByCommentIds(commentIds);
+
+        // 3. 유저가 작성한 Til 삭제
+        List<Til> tils = getTilByUserId(user.getId());
+        List<Long> tilIds = tils.stream()
+                .map(Til::getId)
+                .collect(Collectors.toList());
+
+        tilRepository.softDeleteTilsByTilIds(tilIds);
+
+        // 4. UserStep들을 삭제
+        List<UserStep> userSteps = getUserStepByUserId(user.getId());
+        List<Long> userStepIds = userSteps.stream()
+                .map(UserStep::getId)
+                .collect(Collectors.toList());
+
+        userStepRepository.softDeleteUserStepByUserStepIds(userStepIds);
+
+        // 5. 유저가 만든 Step들을 삭제
+        List<Step> steps = userSteps.stream()
+                .map(userStep -> userStep.getStep())
+                .collect(Collectors.toList());
+
+        List<Long> stepIds = steps.stream()
+                .map(Step::getId)
+                .collect(Collectors.toList());
+
+        stepRepository.softDeleteStepByStepIds(stepIds);
+
+        // 6. 유저가 작성한 Reference들을 삭제
+        referenceRepository.softDeleteReferenceByStepIds(stepIds);
+
+        // 7. UserRoadmap 삭제
+        List<UserRoadmap> userRoadmaps = getUserRoadmapByUserId(user.getId());
+        List<Long> userRoadmapIds = userRoadmaps.stream()
+                .map(UserRoadmap::getId)
+                .collect(Collectors.toList());
+
+        userRoadmapRepository.softDeleteUserRoadmapByUserRoadmapIds(userRoadmapIds);
+
+        // 8. 유저가 만든 로드맵 삭제
+        List<Roadmap> roadmaps = userRoadmaps.stream()
+                .map(userRoadmap -> userRoadmap.getRoadmap())
+                .filter(roadmap -> roadmap.getCreator().getId().equals(user.getId()))
+                .collect(Collectors.toList());
+
+        List<Long> roadmapIds = roadmaps.stream()
+                .map(Roadmap::getId)
+                .collect(Collectors.toList());
+
+        roadmapRepository.softDeleteRoadmapByRoadmapIds(roadmapIds);
+
+        // 9. 유저 삭제
+        userRepository.softDeleteUserById(user.getId());
     }
 
     //////////////
@@ -206,6 +299,7 @@ public class UserService {
                 "<p>안녕하세요!<br>본인 인증을 위해 아래의 코드를 복사해 인증코드 입력 칸에 입력해주세요.<br>" +
                 "<div style='background-color:gainsboro; font-size: 30px; margin: 10px; padding: 5px; width: 250px' >" + code + "</div><br>" +
                 "TIL-y 서비스를 이용해주셔서 감사합니다. <br></p></div>";
+
         return content;
     }
 
@@ -232,8 +326,26 @@ public class UserService {
     }
 
     // id로 사용자 조회
-    private User findById(Long id) {
-        return userRepository.findById(id).orElseThrow(()->new CustomException(ExceptionCode.USER_NOT_FOUND));
+    private User findById(Long userId) {
+        return userRepository.findById(userId).orElseThrow(()->new CustomException(ExceptionCode.USER_NOT_FOUND));
     }
 
+    private List<UserRoadmap> getUserRoadmapByUserId(Long userId) {
+        return userRoadmapRepository.findByUserId(userId);
+    }
+
+    private List<UserStep> getUserStepByUserId(Long userId) {
+        return userStepRepository.findByUserId(userId);
+    }
+
+    private List<Til> getTilByUserId(Long userId){
+        return tilRepository.findByWriterId(userId);
+    }
+
+    private List<Comment> getCommentByUserId(Long userId){return commentRepository.findByWriterId(userId);}
+    
+    private String createDefaultImage(String defaultImage) {
+        int random = (int)(Math.random()*6)+1;
+        return defaultImage+random+".svg";
+    }
 }
